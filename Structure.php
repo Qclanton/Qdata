@@ -2,98 +2,98 @@
 namespace Qdata;
 
 abstract class Structure {
-	public $Db;
-	public $table;
-	public $fields;
-	public $defaultExemplar;
-	public $valuesTypes;
-	public $editableFields;
-	public $deletedMarkerColumn = null;
-	public $primaryField = "id";
-	public $primaryFieldType = "%d";
-	public $dateFields = [];
-	
+    public $Db;
+    public $table;
+    public $fields;
+    public $defaultExemplar;
+    public $valuesTypes;
+    public $editableFields;
+    public $deletedMarkerColumn = null;
+    public $primaryField = "id";
+    public $primaryFieldType = "%d";
+    public $dateFields = [];
     
     
     
-	
-	protected function defineDefaultExemplar() 
+    
+    
+    protected function defineDefaultExemplar() 
     {
-		$exemplar = [];
-		
-		foreach ($this->fields as $name=>$field) {
-			$exemplar[$name] = $field['default'];
-		}
-		
-		$this->defaultExemplar = (object)$exemplar;
-	}
-	
-	protected function defineValuesTypes() 
+        $exemplar = [];
+        
+        foreach ($this->fields as $name=>$field) {
+            $exemplar[$name] = $field['default'];
+        }
+        
+        $this->defaultExemplar = (object)$exemplar;
+    }
+    
+    protected function defineValuesTypes() 
     {
-		$types = [];
-		
-		foreach ($this->fields as $name=>$field) {
-			$types[] = $field['type'];
-		}
-		
-		$this->valuesTypes = $types;
-	}
-	
-	protected function defineEditableFields() 
+        $types = [];
+        
+        foreach ($this->fields as $name=>$field) {
+            $types[] = $field['type'];
+        }
+        
+        $this->valuesTypes = $types;
+    }
+    
+    protected function defineEditableFields() 
     {
-		$editableFields = [];	
-				
-		foreach ($this->fields as $name=>$field) {
-			if (!isset($field['isEditable']) || $field['isEditable'] === true) {
-				$editableFields[] = "`{$name}`={$field['type']}";
-			}
-		}
-		
-		$this->editableFields = $editableFields;
-	}
-	
-	protected function defineDeletedMarkerColumn() 
+        $editableFields = [];    
+                
+        foreach ($this->fields as $name=>$field) {
+            if (!isset($field['isEditable']) || $field['isEditable'] === true) {
+                $editableFields[] = "`{$name}`={$field['type']}";
+            }
+        }
+        
+        $this->editableFields = $editableFields;
+    }
+    
+    protected function defineDeletedMarkerColumn() 
     {
         foreach ($this->fields as $name=>$field) {
             if (isset($this->fields['isDeletedMarker']) && $field['isDeletedMarker'] === true) {
                 $this->deletedMarkerColumn = $name;
             }
         }
-	}
-	
-	protected function definePrimaryField() 
-    {		
-		foreach ($this->fields as $name=>$field) {
-			if (isset($field['isPrimary']) && $field['isPrimary'] === true) {
-				$this->primaryField = $name;
-				$this->primaryFieldType = $field['type'];
-			}
-		}	
-	}
-	
-	protected function defineDateFields() 
-    {		
-		foreach ($this->fields as $name=>$field) {
-			if (isset($field['isDate']) && $field['isDate'] === true) {
-				$this->dateFields[$name] = $field;
-			}
-		}
-	}		
-	
-	public function __construct() 
-    {	
-        global $wpdb;	
+    }
+    
+    protected function definePrimaryField() 
+    {        
+        foreach ($this->fields as $name=>$field) {
+            if (isset($field['isPrimary']) && $field['isPrimary'] === true) {
+                $this->primaryField = $name;
+                $this->primaryFieldType = $field['type'];
+            }
+        }    
+    }
+    
+    protected function defineDateFields() 
+    {        
+        foreach ($this->fields as $name=>$field) {
+            if (isset($field['isDate']) && $field['isDate'] === true) {
+                $this->dateFields[$name] = $field;
+            }
+        }
+    }        
+    
+    public function __construct() 
+    {    
+        global $wpdb;    
         
-		$this->Db = $wpdb;
+        $this->Db = $wpdb;
         $this->table = $this->Db->prefix . $this->table;
-		
-		$this->defineDefaultExemplar();
-		$this->defineValuesTypes();
-		$this->defineEditableFields();
-		$this->defineDeletedMarkerColumn();
-		$this->definePrimaryField();
-		$this->defineDateFields();
-	}
+        
+        $this->defineDefaultExemplar();
+        $this->defineValuesTypes();
+        $this->defineEditableFields();
+        $this->defineDeletedMarkerColumn();
+        $this->definePrimaryField();
+        $this->defineDateFields();
+    }
     
     
     
@@ -173,19 +173,19 @@ abstract class Structure {
         
         return $this->Db->query($query);
     }
-	
-	
-	
-	
-	
-	public function set($data) 
+    
+    
+    
+    
+    
+    public function set($data) 
     {
-		return (is_object($data) ? $this->setOne($data) : $this->setAll($data));
-	}
-	
-	protected function setOne($exemplar) 
+        return (is_object($data) ? $this->setOne($data) : $this->setAll($data));
+    }
+    
+    protected function setOne($exemplar) 
     { 
-		if (empty($exemplar->{$this->primaryField})) { 
+        if (empty($exemplar->{$this->primaryField})) { 
             $exemplar->{$this->primaryField} = null; 
         }
         
@@ -194,74 +194,74 @@ abstract class Structure {
                 $exemplar->{$name} = $this->defaultExemplar->{$name};
             }
         }
-		
-		if (!empty($this->dateFields)) {
-			foreach ($this->dateFields as $name=>$field) {
-				if ($exemplar->{$name} === $field['default']) {
-					$exemplar->{$name} = date("Y-m-d H:i:s");
-				}
-			}
-		}
-		
+        
+        if (!empty($this->dateFields)) {
+            foreach ($this->dateFields as $name=>$field) {
+                if ($exemplar->{$name} === $field['default']) {
+                    $exemplar->{$name} = date("Y-m-d H:i:s");
+                }
+            }
+        }
         
         
-		$query = "INSERT INTO {$this->table} VALUES (" . implode(",", $this->valuesTypes) . ")";
         
-        if (!empty($this->editableFields))	{
+        $query = "INSERT INTO {$this->table} VALUES (" . implode(",", $this->valuesTypes) . ")";
+        
+        if (!empty($this->editableFields))    {
             $query .= " ON DUPLICATE KEY UPDATE `{$this->primaryField}`=LAST_INSERT_ID({$this->primaryField}), " . implode(",", $this->editableFields);
         }
 
 
 
-		$params = [$query];
+        $params = [$query];
         
-		foreach ($this->fields as $name=>$field) { 
+        foreach ($this->fields as $name=>$field) { 
             $params[] = $exemplar->{$name}; 
         }
         
-		foreach ($this->fields as $name=>$field) { 
+        foreach ($this->fields as $name=>$field) { 
             if (!isset($field['isEditable']) || $field['isEditable'] === true) { 
                 $params[] = $exemplar->{$name}; 
             } 
         }
-		
         
         
-		$result = $this->Db->query(call_user_func_array([$this->Db, "prepare"], $params));
+        
+        $result = $this->Db->query(call_user_func_array([$this->Db, "prepare"], $params));
         
         return ($result ? $this->Db->insert_id : false);
-	}
-	
-	protected function setAll($exemplars) 
+    }
+    
+    protected function setAll($exemplars) 
     {
-		$result = false;
-		
-		foreach ($exemplars as $exemplar) {
-			$exemplar = (object)$exemplar;
+        $result = false;
+        
+        foreach ($exemplars as $exemplar) {
+            $exemplar = (object)$exemplar;
             
-			if (!isset($exemplar->{$this->primaryField})) { 
+            if (!isset($exemplar->{$this->primaryField})) { 
                 $exemplar->{$this->primaryField} = null; 
             }
 
-			$existedExemplar = $this->get($exemplar->{$this->primaryField});
-			$exemplar = (object)array_merge((array)$existedExemplar, (array)$exemplar);
-			
-			$result = $this->setOne($exemplar); 
-		}
-		
-		return $result;
-	}
-	
-	
-	
-	
-	
-	public function get($criterion=false) 
+            $existedExemplar = $this->get($exemplar->{$this->primaryField});
+            $exemplar = (object)array_merge((array)$existedExemplar, (array)$exemplar);
+            
+            $result = $this->setOne($exemplar); 
+        }
+        
+        return $result;
+    }
+    
+    
+    
+    
+    
+    public function get($criterion=false) 
     {
-		return (is_array($criterion) || is_object($criterion) || !$criterion ? $this->getAll($criterion) : $this->getOne($criterion));	
-	}
-	
-	public function getOne($uniqueValue, $returnDefault=true, $field=null, $type="%s", $showDeleted=true)
+        return (is_array($criterion) || is_object($criterion) || !$criterion ? $this->getAll($criterion) : $this->getOne($criterion));    
+    }
+    
+    public function getOne($uniqueValue, $returnDefault=true, $field=null, $type="%s", $showDeleted=true)
     {
         $field = (in_array($field, array_keys($this->fields)) ? $field : $this->primaryField);
         $type = ($field !== $this->primaryField ? $type : $this->primaryFieldType);
@@ -273,14 +273,14 @@ abstract class Structure {
         }
         
         $exemplar = $this->Db->get_row($this->Db->prepare($query, $uniqueValue));
-		
-		if (empty($exemplar) && $returnDefault) { 
+        
+        if (empty($exemplar) && $returnDefault) { 
             $exemplar = $this->defaultExemplar; 
         }
-		
-		return $exemplar;
-	}
-	
+        
+        return $exemplar;
+    }
+    
     protected function prepareQuery($criterion=null, $fields=[])
     {
         $fields = (array)$fields;
@@ -294,10 +294,10 @@ abstract class Structure {
                 $criterion['custom'] = $criterion[0];
             }
             
-			if (isset($criterion['custom'])) {
-				$query .= " WHERE {$criterion['custom']}";
-			}
-			
+            if (isset($criterion['custom'])) {
+                $query .= " WHERE {$criterion['custom']}";
+            }
+            
             
             
             if (isset($criterion['confines'])) {
@@ -307,21 +307,21 @@ abstract class Structure {
                     $query .= " AND {$confine}";
                 }
             }
-			
-			
             
-			if (isset($criterion['orderby'])) {
-				$query .= " ORDER BY `{$criterion['orderby']}`";
-				
-				if (isset($criterion['order'])) {
-					$query .= " {$criterion['order']}";
-				}
-			}
-			
-			if (isset($criterion['limit'])) {
+            
+            
+            if (isset($criterion['orderby'])) {
+                $query .= " ORDER BY `{$criterion['orderby']}`";
+                
+                if (isset($criterion['order'])) {
+                    $query .= " {$criterion['order']}";
+                }
+            }
+            
+            if (isset($criterion['limit'])) {
                 $limitstart = (isset($criterion['limitstart']) ? $criterion['limitstart'] : 0);
-				$query .= " LIMIT {$limitstart}, {$criterion['limit']}";
-			}  
+                $query .= " LIMIT {$limitstart}, {$criterion['limit']}";
+            }  
         } 
         
         
@@ -329,14 +329,14 @@ abstract class Structure {
         return $query;   
     }
     
-	public function getAll($criterion=null) 
+    public function getAll($criterion=null) 
     {
         $query = $this->prepareQuery($criterion);
-		$exemplars = $this->Db->get_results($query);		
+        $exemplars = $this->Db->get_results($query);        
         
-		return $exemplars;
-	}
-	
+        return $exemplars;
+    }
+    
     public function count($criterion=null)
     {
         if (is_array($criterion) || is_object($criterion) || !$criterion) {
@@ -354,65 +354,65 @@ abstract class Structure {
     }
     
     
-	
-	
-	public function deleteConstatly($id) 
-    {
-		$this->delete($id, true);
-	}
     
-	public function delete($id, $constatly = false) 
-    {
-		return (($constatly || is_null($this->deletedMarkerColumn)) ? $this->remove($id) : $this->markAsDeleted($id));
-	}
-	
-	protected function markAsDeleted($id) 
-    {
-		$query = "UPDATE {$this->table} SET `{$this->deletedMarkerColumn}`='1' WHERE `{$this->primaryField}`={$this->primaryFieldType}";
-		$result = $this->Db->query($this->Db->prepare($query, $id));
-		
-		return $result;
-	}
     
-	protected function remove($id) 
+    public function deleteConstatly($id) 
     {
-		$query = "DELETE FROM {$this->table} WHERE `{$this->primaryField}`={$this->primaryFieldType}";		
-		$result = $this->Db->query($this->Db->prepare($query, $id));
-		
-		return $result;
-	}	
-	
-	public function restore($id) 
-    {
-		$query = "UPDATE {$this->table} SET `{$this->deletedMarkerColumn}`='0' WHERE `id`={$this->primaryFieldType}";
-		$result = $this->Db->query($this->Db->prepare($query, $id));
-		
-		return $result;	
-	}
-	
+        $this->delete($id, true);
+    }
     
-	
-	
-	
-	public function simplify($objectsList, $value, $key=null, $type="object") 
+    public function delete($id, $constatly = false) 
     {
-		$simplified = [];
-		
-		foreach ($objectsList as $object) {
-			$object = (object)$object;
-			
-			if (empty($key)) {
-				$simplified[] = $object->{$value};
-			} else {
-				$simplified[$object->{$key}] = $object->{$value};
-			}	
-		}
-		
-		if ($type == "object") { 
+        return (($constatly || is_null($this->deletedMarkerColumn)) ? $this->remove($id) : $this->markAsDeleted($id));
+    }
+    
+    protected function markAsDeleted($id) 
+    {
+        $query = "UPDATE {$this->table} SET `{$this->deletedMarkerColumn}`='1' WHERE `{$this->primaryField}`={$this->primaryFieldType}";
+        $result = $this->Db->query($this->Db->prepare($query, $id));
+        
+        return $result;
+    }
+    
+    protected function remove($id) 
+    {
+        $query = "DELETE FROM {$this->table} WHERE `{$this->primaryField}`={$this->primaryFieldType}";        
+        $result = $this->Db->query($this->Db->prepare($query, $id));
+        
+        return $result;
+    }    
+    
+    public function restore($id) 
+    {
+        $query = "UPDATE {$this->table} SET `{$this->deletedMarkerColumn}`='0' WHERE `id`={$this->primaryFieldType}";
+        $result = $this->Db->query($this->Db->prepare($query, $id));
+        
+        return $result;    
+    }
+    
+    
+    
+    
+    
+    public function simplify($objectsList, $value, $key=null, $type="object") 
+    {
+        $simplified = [];
+        
+        foreach ($objectsList as $object) {
+            $object = (object)$object;
+            
+            if (empty($key)) {
+                $simplified[] = $object->{$value};
+            } else {
+                $simplified[$object->{$key}] = $object->{$value};
+            }    
+        }
+        
+        if ($type == "object") { 
             $simplified = (object)$simplified; 
         }
-		
-		return $simplified;
-	}
+        
+        return $simplified;
+    }
 }
 ?>
