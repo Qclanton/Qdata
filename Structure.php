@@ -102,6 +102,7 @@ abstract class Structure {
     {
         $fieldsQuery = "";
         $primaryFieldQuery = "";
+        $indexesQuery = "";
         
         
         
@@ -116,6 +117,11 @@ abstract class Structure {
                 case "%d":
                     $type = "BIGINT";
                     $length = (isset($field['length']) ? "({$field['length']})" : "(20)");
+                    break;
+                    
+                case "%f":
+                    $type = "FLOAT";
+                    $length = (isset($field['length']) ? "({$field['length']})" : "(11,4)");
                     break;
                 
                 case "%s":
@@ -168,6 +174,12 @@ abstract class Structure {
             ) {
                 $additions = "DEFAULT " . ($field['default'] === null ? "NULL" : "'{$field['default']}'");
             }
+            
+            
+            
+            if (isset($field['isUnique']) && $field['isUnique'] === true) {
+                $indexesQuery = ", UNIQUE KEY `i_{$name}` (`{$name}`)";
+            }
 
 
 
@@ -176,7 +188,7 @@ abstract class Structure {
         
         
         
-        $fieldsQuery .= $primaryFieldQuery;
+        $fieldsQuery .= $primaryFieldQuery . $indexesQuery;
         $query = "CREATE TABLE `{$this->table}` ($fieldsQuery) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
         
         
