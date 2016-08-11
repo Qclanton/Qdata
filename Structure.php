@@ -44,7 +44,7 @@ abstract class Structure {
 		$editableFields = [];	
 				
 		foreach ($this->fields as $name=>$field) {
-			if ($field['isEditable'] === true) {
+			if (!isset($field['isEditable']) || $field['isEditable'] === true) {
 				$editableFields[] = "`{$name}`={$field['type']}";
 			}
 		}
@@ -106,17 +106,27 @@ abstract class Structure {
         
         
         foreach ($this->fields as $name=>$field) {
-            $type = "VARCHAR";
-            $length = (isset($this->fields[$name]['length']) ? "({$this->fields[$name]['length']}" : "(255)");
             $nullable = "NOT NULL";
             $additions = "";
             
             
             
-            if ($name === $this->primaryField) {
-                if ($this->primaryFieldType === "%d") {
+            switch ($field['type']) {
+                case "%d":
                     $type = "BIGINT";
-                    $length = "(20)";
+                    $length = (isset($field['length']) ? "({$field['length']}" : "(20)");
+                    break;
+                
+                case "%s":
+                    $type = "VARCHAR";
+                    $length = "(255)";
+                    break;
+            }
+            
+            
+            
+            if ($name === $this->primaryField) {
+                if ($this->type === "BIGINT") {
                     $additions = "UNSIGNED AUTO_INCREMENT";
                 }           
                 
@@ -125,28 +135,28 @@ abstract class Structure {
             
 
 
-            if ($this->fields[$name]['isDate']) {
+            if ($field['isDate']) {
                 $type = "DATETIME";
                 $length = "";
             }
             
             
             
-            if ($this->fields[$name]['isText']) {
+            if ($field['isText']) {
                 $type = "TEXT";
                 $length = "";
             }
             
             
             
-            if ($this->fields[$name]['nullable'] || $this->fields[$name]['default'] === null) {
+            if ($field['nullable'] || $field['default'] === null) {
                 $nullable = "";
             }
             
             
             
-            if ($this->fields[$name]['default']) {
-                $additions = "DEFAULT " . ($this->fields[$name]['default'] === null ? "NULL" : "'{$this->fields[$name]['default']}'");
+            if ($field['default']) {
+                $additions = "DEFAULT " . ($field['default'] === null ? "NULL" : "'{$field['default']}'");
             }
 
 
@@ -187,7 +197,7 @@ abstract class Structure {
 		
 		if (!empty($this->dateFields)) {
 			foreach ($this->dateFields as $name=>$field) {
-				if ($exemplar->{$name} == $field['default']) {
+				if ($exemplar->{$name} === $field['default']) {
 					$exemplar->{$name} = date("Y-m-d H:i:s");
 				}
 			}
@@ -210,7 +220,7 @@ abstract class Structure {
         }
         
 		foreach ($this->fields as $name=>$field) { 
-            if ($field['isEditable'] === true) { 
+            if (!isset($field['isEditable']) || $field['isEditable'] === true) { 
                 $params[] = $exemplar->{$name}; 
             } 
         }
