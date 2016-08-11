@@ -5,13 +5,13 @@ abstract class Structure {
 	public $Db;
 	public $table;
 	public $fields;
-	public $default_exemplar;
-	public $values_types;
-	public $editable_fields;
-	public $deleted_marker_column = false;
-	public $primary_field = "id";
-	public $primary_field_type = "%d";
-	public $date_fields = [];
+	public $defaultExemplar;
+	public $valuesTypes;
+	public $editableFields;
+	public $deletedMarkerColumn = null;
+	public $primaryField = "id";
+	public $primaryFieldType = "%d";
+	public $dateFields = [];
 	
     
     
@@ -25,7 +25,7 @@ abstract class Structure {
 			$exemplar[$name] = $field['default'];
 		}
 		
-		$this->default_exemplar = (object)$exemplar;
+		$this->defaultExemplar = (object)$exemplar;
 	}
 	
 	protected function defineValuesTypes() 
@@ -36,37 +36,37 @@ abstract class Structure {
 			$types[] = $field['type'];
 		}
 		
-		$this->values_types = $types;
+		$this->valuesTypes = $types;
 	}
 	
 	protected function defineEditableFields() 
     {
-		$editable_fields = [];	
+		$editableFields = [];	
 				
 		foreach ($this->fields as $name=>$field) {
-			if ($field['editable_fl'] == true) {
-				$editable_fields[] = "`" . $name . "`=" . $field['type'];
+			if ($field['isEditable'] === true) {
+				$editableFields[] = "`{$name}`={$field['type']}";
 			}
 		}
 		
-		$this->editable_fields = $editable_fields;
+		$this->editableFields = $editableFields;
 	}
 	
 	protected function defineDeletedMarkerColumn() 
     {
-		if (!$this->deleted_marker_column) {
-			if (isset($this->fields['deleted_fl'])) {
-				$this->deleted_marker_column = "deleted_fl";
-			}
-		}
+        foreach ($this->fields as $name=>$field) {
+            if (isset($this->fields['isDeletedMarker']) && $field['isDeletedMarker'] === true) {
+                $this->deletedMarkerColumn = $name;
+            }
+        }
 	}
 	
 	protected function definePrimaryField() 
     {		
 		foreach ($this->fields as $name=>$field) {
-			if (isset($field['primary_fl']) && $field['primary_fl'] == true) {
-				$this->primary_field = $name;
-				$this->primary_field_type = $field['type'];
+			if (isset($field['isPrimary']) && $field['isPrimary'] === true) {
+				$this->primaryField = $name;
+				$this->primaryFieldType = $field['type'];
 			}
 		}	
 	}
@@ -74,8 +74,8 @@ abstract class Structure {
 	protected function defineDateFields() 
     {		
 		foreach ($this->fields as $name=>$field) {
-			if (isset($field['date_fl']) && $field['date_fl'] == true) {
-				$this->date_fields[$name] = $field;
+			if (isset($field['isDate']) && $field['isDate'] === true) {
+				$this->dateFields[$name] = $field;
 			}
 		}
 	}		
@@ -83,7 +83,9 @@ abstract class Structure {
 	public function __construct() 
     {	
         global $wpdb;	
+        
 		$this->Db = $wpdb;
+        $this->table = $this->Db->prefix . $this->table;
 		
 		$this->defineDefaultExemplar();
 		$this->defineValuesTypes();
@@ -92,6 +94,75 @@ abstract class Structure {
 		$this->definePrimaryField();
 		$this->defineDateFields();
 	}
+    
+    
+    
+    
+    protected function createTable()
+    {
+        $fieldsQuery = "";
+        $primaryFieldQuery = "";
+        
+        
+        
+        foreach ($this->fields as $name=>$field) {
+            $type = "VARCHAR";
+            $length = (isset($this->fields[$name]['length']) ? "({$this->fields[$name]['length']}" : "(255)");
+            $nullable = "NOT NULL";
+            $additions = "";
+            
+            
+            
+            if ($name === $this->primaryField) {
+                if ($this->primaryFieldType === "%d") {
+                    $type = "BIGINT";
+                    $length = "(20)";
+                    $additions = "UNSIGNED AUTO_INCREMENT";
+                }           
+                
+                $primaryFieldQuery = "PRIMARY KEY (`{$name}`)";
+            }
+            
+
+
+            if ($this->fields[$name]['isDate']) {
+                $type = "DATETIME";
+                $length = "";
+            }
+            
+            
+            
+            if ($this->fields[$name]['isText']) {
+                $type = "TEXT";
+                $length = "";
+            }
+            
+            
+            
+            if ($this->fields[$name]['nullable'] || $this->fields[$name]['default'] === null) {
+                $nullable = "";
+            }
+            
+            
+            
+            if ($this->fields[$name]['default']) {
+                $additions = "DEFAULT " . ($this->fields[$name]['default'] === null ? "NULL" : "'{$this->fields[$name]['default']}'");
+            }
+
+
+
+            $fieldsQuery .= "`{$name}` {$type}{$length} {$nullable} {$additions}," . PHP_EOL;
+        }
+        
+        
+        
+        $fieldsQuery .= $primaryFieldQuery;
+        $query = "CREATE TABLE `{$this->table}` ($fieldsQuery) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+        
+        
+        
+        return $this->Db->query($query);
+    }
 	
 	
 	
@@ -99,25 +170,23 @@ abstract class Structure {
 	
 	public function set($data) 
     {
-		$result = (is_object($data) ? $this->setOne($data) : $this->setAll($data));
-		
-		return $result;
+		return (is_object($data) ? $this->setOne($data) : $this->setAll($data));
 	}
 	
 	protected function setOne($exemplar) 
     { 
-		if (empty($exemplar->{$this->primary_field})) { 
-            $exemplar->{$this->primary_field} = null; 
+		if (empty($exemplar->{$this->primaryField})) { 
+            $exemplar->{$this->primaryField} = null; 
         }
         
         foreach ($this->fields as $name=>$field) {
             if (!isset($exemplar->{$name})) {
-                $exemplar->{$name} = $this->default_exemplar->{$name};
+                $exemplar->{$name} = $this->defaultExemplar->{$name};
             }
         }
 		
-		if (!empty($this->date_fields)) {
-			foreach ($this->date_fields as $name=>$field) {
+		if (!empty($this->dateFields)) {
+			foreach ($this->dateFields as $name=>$field) {
 				if ($exemplar->{$name} == $field['default']) {
 					$exemplar->{$name} = date("Y-m-d H:i:s");
 				}
@@ -126,10 +195,10 @@ abstract class Structure {
 		
         
         
-		$query = "INSERT INTO " . $this->Db->prefix . $this->table . " VALUES (" . implode(',', $this->values_types) . ")";
+		$query = "INSERT INTO {$this->table} VALUES (" . implode(",", $this->valuesTypes) . ")";
         
-        if (!empty($this->editable_fields))	{
-            $query .= " ON DUPLICATE KEY UPDATE `{$this->primary_field}`=LAST_INSERT_ID({$this->primary_field}), " . implode(",", $this->editable_fields);
+        if (!empty($this->editableFields))	{
+            $query .= " ON DUPLICATE KEY UPDATE `{$this->primaryField}`=LAST_INSERT_ID({$this->primaryField}), " . implode(",", $this->editableFields);
         }
 
 
@@ -141,7 +210,7 @@ abstract class Structure {
         }
         
 		foreach ($this->fields as $name=>$field) { 
-            if ($field['editable_fl'] == true) { 
+            if ($field['isEditable'] === true) { 
                 $params[] = $exemplar->{$name}; 
             } 
         }
@@ -160,12 +229,12 @@ abstract class Structure {
 		foreach ($exemplars as $exemplar) {
 			$exemplar = (object)$exemplar;
             
-			if (!isset($exemplar->{$this->primary_field})) { 
-                $exemplar->{$this->primary_field} = null; 
+			if (!isset($exemplar->{$this->primaryField})) { 
+                $exemplar->{$this->primaryField} = null; 
             }
 
-			$existed_exemplar = $this->get($exemplar->{$this->primary_field});
-			$exemplar = (object)array_merge((array)$existed_exemplar, (array)$exemplar);
+			$existedExemplar = $this->get($exemplar->{$this->primaryField});
+			$exemplar = (object)array_merge((array)$existedExemplar, (array)$exemplar);
 			
 			$result = $this->setOne($exemplar); 
 		}
@@ -179,26 +248,24 @@ abstract class Structure {
 	
 	public function get($criterion=false) 
     {
-		$result = (is_array($criterion) || is_object($criterion) || !$criterion ? $this->getAll($criterion) : $this->getOne($criterion));
-		
-		return $result;		
+		return (is_array($criterion) || is_object($criterion) || !$criterion ? $this->getAll($criterion) : $this->getOne($criterion));	
 	}
 	
-	public function getOne($unique_value, $return_default=true, $field=null, $type="%s", $show_deleted=true)
+	public function getOne($uniqueValue, $returnDefault=true, $field=null, $type="%s", $showDeleted=true)
     {
-        $field = (in_array($field, array_keys($this->fields)) ? $field : $this->primary_field);
-        $type = ($field !== $this->primary_field ? $type : $this->primary_field_type);
+        $field = (in_array($field, array_keys($this->fields)) ? $field : $this->primaryField);
+        $type = ($field !== $this->primaryField ? $type : $this->primaryFieldType);
         
-        $query = "SELECT * FROM {$this->Db->prefix}{$this->table} WHERE `{$field}`={$type}";
+        $query = "SELECT * FROM {$this->table} WHERE `{$field}`={$type}";
         
-        if (!$show_deleted && isset($this->fields[$this->deleted_marker_column])) {
-            $query .= "AND `{$this->deleted_marker_column}`='NO'";
+        if (!$showDeleted && isset($this->fields[$this->deletedMarkerColumn])) {
+            $query .= "AND `{$this->deletedMarkerColumn}`='0'";
         }
         
-        $exemplar = $this->Db->get_row($this->Db->prepare($query, $unique_value));
+        $exemplar = $this->Db->get_row($this->Db->prepare($query, $uniqueValue));
 		
-		if (empty($exemplar) && $return_default) { 
-            $exemplar = $this->default_exemplar; 
+		if (empty($exemplar) && $returnDefault) { 
+            $exemplar = $this->defaultExemplar; 
         }
 		
 		return $exemplar;
@@ -207,9 +274,8 @@ abstract class Structure {
     protected function prepareQuery($criterion=null, $fields=[])
     {
         $fields = (array)$fields;
-        $fields_list = (empty($fields) ? "*" : implode(", ", $fields));
-         
-        $query = "SELECT {$fields_list} FROM {$this->Db->prefix}{$this->table}";
+        $fieldsList = (empty($fields) ? "*" : implode(", ", $fields));         
+        $query = "SELECT {$fieldsList} FROM {$this->table}";
         
         
         
@@ -264,7 +330,7 @@ abstract class Structure {
     public function count($criterion=null)
     {
         if (is_array($criterion) || is_object($criterion) || !$criterion) {
-            $query = $this->prepareQuery($criterion, "COUNT({$this->primary_field})");
+            $query = $this->prepareQuery($criterion, "COUNT({$this->primaryField})");
             $quantity = $this->Db->get_var($query);            
             $limitstart = (isset($criterion['limitstart']) ? $criterion['limitstart'] : 0);          
    
@@ -280,19 +346,19 @@ abstract class Structure {
     
 	
 	
-	public function delete_constatly($id) 
+	public function deleteConstatly($id) 
     {
 		$this->delete($id, true);
 	}
     
 	public function delete($id, $constatly = false) 
     {
-		return (($constatly || $this->deleted_marker_column == false) ? $this->remove($id) : $this->markAsDeleted($id));
+		return (($constatly || is_null($this->deletedMarkerColumn)) ? $this->remove($id) : $this->markAsDeleted($id));
 	}
 	
 	protected function markAsDeleted($id) 
     {
-		$query = "UPDATE " . $this->Db->prefix . $this->table . " SET `" . $this->deleted_marker_column . "`='YES' WHERE `{$this->primary_field}`={$this->primary_field_type}";
+		$query = "UPDATE {$this->table} SET `{$this->deletedMarkerColumn}`='1' WHERE `{$this->primaryField}`={$this->primaryFieldType}";
 		$result = $this->Db->query($this->Db->prepare($query, $id));
 		
 		return $result;
@@ -300,7 +366,7 @@ abstract class Structure {
     
 	protected function remove($id) 
     {
-		$query = "DELETE FROM " . $this->Db->prefix . $this->table . " WHERE `{$this->primary_field}`={$this->primary_field_type}";		
+		$query = "DELETE FROM {$this->table} WHERE `{$this->primaryField}`={$this->primaryFieldType}";		
 		$result = $this->Db->query($this->Db->prepare($query, $id));
 		
 		return $result;
@@ -308,7 +374,7 @@ abstract class Structure {
 	
 	public function restore($id) 
     {
-		$query = "UPDATE " . $this->Db->prefix . $this->table . " SET `" . $this->deleted_marker_column . "`='NO' WHERE `id`=%d";
+		$query = "UPDATE {$this->table} SET `{$this->deletedMarkerColumn}`='0' WHERE `id`={$this->primaryFieldType}";
 		$result = $this->Db->query($this->Db->prepare($query, $id));
 		
 		return $result;	
@@ -318,11 +384,11 @@ abstract class Structure {
 	
 	
 	
-	public function simplify($object_list, $value, $key=null, $type="object") 
+	public function simplify($objectsList, $value, $key=null, $type="object") 
     {
 		$simplified = [];
 		
-		foreach ($object_list as $object) {
+		foreach ($objectsList as $object) {
 			$object = (object)$object;
 			
 			if (empty($key)) {
