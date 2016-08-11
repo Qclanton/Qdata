@@ -163,6 +163,7 @@ abstract class Structure {
             if (
                 (array_key_exists("default", $field)) && 
                 ($name !== $this->primaryField) &&
+                (!isset($field['isText']) || $field['isText'] === false) && 
                 (!isset($field['isDate']) || $field['isDate'] === false)
             ) {
                 $additions = "DEFAULT " . ($field['default'] === null ? "NULL" : "'{$field['default']}'");
