@@ -98,7 +98,7 @@ abstract class Structure {
     
     
     
-    protected function createTable()
+    public function createTable()
     {
         $fieldsQuery = "";
         $primaryFieldQuery = "";
@@ -106,6 +106,7 @@ abstract class Structure {
         
         
         foreach ($this->fields as $name=>$field) {
+            $signed = "";
             $nullable = "NOT NULL";
             $additions = "";
             
@@ -114,7 +115,7 @@ abstract class Structure {
             switch ($field['type']) {
                 case "%d":
                     $type = "BIGINT";
-                    $length = (isset($field['length']) ? "({$field['length']}" : "(20)");
+                    $length = (isset($field['length']) ? "({$field['length']})" : "(20)");
                     break;
                 
                 case "%s":
@@ -126,8 +127,9 @@ abstract class Structure {
             
             
             if ($name === $this->primaryField) {
-                if ($this->type === "BIGINT") {
-                    $additions = "UNSIGNED AUTO_INCREMENT";
+                if ($type === "BIGINT") {
+                    $signed = "UNSIGNED";
+                    $additions = "AUTO_INCREMENT";
                 }           
                 
                 $primaryFieldQuery = "PRIMARY KEY (`{$name}`)";
@@ -135,33 +137,40 @@ abstract class Structure {
             
 
 
-            if ($field['isDate']) {
+            if (isset($field['isDate']) && $field['isDate'] === true) {
                 $type = "DATETIME";
                 $length = "";
             }
             
             
             
-            if ($field['isText']) {
+            if (isset($field['isText']) && $field['isText'] === true) {
                 $type = "TEXT";
                 $length = "";
             }
             
             
             
-            if ($field['nullable'] || $field['default'] === null) {
+            if (
+                (isset($field['nullable']) && $field['nullable'] === true) || 
+                (array_key_exists("default", $field) && $field['default'] === null)
+            ) {
                 $nullable = "";
             }
             
             
             
-            if ($field['default']) {
+            if (
+                (array_key_exists("default", $field)) && 
+                ($name !== $this->primaryField) &&
+                (!isset($field['isDate']) || $field['isDate'] === false)
+            ) {
                 $additions = "DEFAULT " . ($field['default'] === null ? "NULL" : "'{$field['default']}'");
             }
 
 
 
-            $fieldsQuery .= "`{$name}` {$type}{$length} {$nullable} {$additions}," . PHP_EOL;
+            $fieldsQuery .= "`{$name}` {$type}{$length} {$signed} {$nullable} {$additions}," . PHP_EOL;
         }
         
         
@@ -415,4 +424,3 @@ abstract class Structure {
         return $simplified;
     }
 }
-?>
