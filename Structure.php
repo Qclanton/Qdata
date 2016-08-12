@@ -6,6 +6,7 @@ abstract class Structure {
     public $table;
     public $fields;
     public $joins;
+    public $attaches = [];
     public $defaultExemplar;
     public $valuesTypes;
     public $editableFields;
@@ -197,7 +198,7 @@ abstract class Structure {
         
         if (!empty($this->indexes)) {
             foreach ($this->indexes as $name=>$index) {
-                $unique = (!isset($index['isUnique']) || $index['isUnique'] === true ? "UNIQUE" : "");
+                $unique = (isset($index['isUnique']) && $index['isUnique'] === true ? "UNIQUE" : "");
                 $indexesQuery .= ", {$unique} KEY `i_{$name}` (`" . implode("`,`", $index['fields']) . "`)";
             }
         }
@@ -205,7 +206,7 @@ abstract class Structure {
         
         
         $fieldsQuery .= $primaryFieldQuery . $indexesQuery;
-        $query = "CREATE TABLE `{$this->table}` ($fieldsQuery) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
+        $query = "CREATE TABLE IF NOT EXISTS `{$this->table}` ($fieldsQuery) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci";
         
         
         
@@ -295,8 +296,12 @@ abstract class Structure {
     
     
     public function tie($table, $connection, $joinType="JOIN") 
-    {
-        $this->joins = "{$joinType} {$table} ON ($connection)";
+    {   
+        if (is_array($connection)) {
+            $connection = implode(" AND ", $connection);
+        } 
+        
+        $this->joins .= "{$joinType} {$table} ON ($connection) ";
         
         return $this;
     }
@@ -305,16 +310,72 @@ abstract class Structure {
     
     
     
-    public function get($criterion=false) 
+    public function attach($entity, Structure $Structure, $entityField=null, $attachField=null, $type="ONE_ONE") 
     {
-        return (is_array($criterion) || is_object($criterion) || !$criterion ? $this->getAll($criterion) : $this->getOne($criterion));    
+        if (is_null($entityField)) {
+            $entityField = "{$entity}_id";
+        }
+        
+        $this->attaches[] = [$entity, $Structure, $entityField, $attachField, $type];
+        
+        return $this;
+    }
+    
+    protected function applyAttaches($selection) 
+    {
+        if (!empty($this->attaches)) {
+            if (is_array($selection)) {
+                foreach ($selection as &$exemplar) {
+                    $exemplar = $this->applyAllAttaches($exemplar);
+                }            
+            } else {
+                $selection = $this->applyAllAttaches($selection);
+            }
+        }
+        
+        $this->attaches = [];
+        
+        return $selection;
+    }
+    
+    protected function applyAllAttaches($exemplar)
+    {
+        foreach ($this->attaches as $attach) {
+            list($entity, $Structure, $entityField, $attachField, $type) = $attach;
+            
+            switch ($type) {
+                case "ONE_ONE":
+                    $exemplar->{$entity} = $Structure->find($exemplar->{$entityField});
+                    break;
+                    
+                case "ONE_MANY":
+                    $exemplar->{$entity} = $Structure->find(["{$Structure->attachField}='{$exemplar->{$entityField}}'"]);
+                    break;
+            }
+        }
+
+        return $exemplar;
+    }
+    
+    
+    
+    
+    public function find($criterion=null)
+    {
+        return $this->get($criterion);
+    }
+    
+    public function get($criterion=null) 
+    {
+        return (is_array($criterion) || is_object($criterion) || is_null($criterion) ? $this->getAll($criterion) : $this->getOne($criterion));    
     }
     
     public function getOne($uniqueValue, $returnDefault=true, $field=null, $type="%s", $showDeleted=true)
     {
         $field = (in_array($field, array_keys($this->fields)) ? $field : $this->primaryField);
         $type = ($field !== $this->primaryField ? $type : $this->primaryFieldType);        
-        $query = "SELECT * FROM {$this->table} {$this->joins} WHERE `{$field}`={$type}";
+        $query = "SELECT * FROM {$this->table} {$this->joins} WHERE {$this->table}.`{$field}`={$type}";
+        $this->joins = "";
         
         if (!$showDeleted && isset($this->fields[$this->deletedMarkerColumn])) {
             $query .= "AND `{$this->deletedMarkerColumn}`='0'";
@@ -326,14 +387,16 @@ abstract class Structure {
             $exemplar = $this->defaultExemplar; 
         }
         
-        return $exemplar;
+        
+        
+        return $this->applyAttaches($exemplar);
     }
     
-    protected function prepareQuery($criterion=null, $fields=[])
+    protected function prepareQuery($criterion=null)
     {
-        $fields = (array)$fields;
-        $fieldsList = (empty($fields) ? "*" : implode(", ", $fields));         
+        $fieldsList = (empty($criterion['fields']) ? "*" : implode(", ", $criterion['fields']));         
         $query = "SELECT {$fieldsList} FROM {$this->table} {$this->joins}";
+        $this->joins = "";
         
         
         
@@ -382,12 +445,12 @@ abstract class Structure {
         $query = $this->prepareQuery($criterion);
         $exemplars = $this->Db->get_results($query);        
         
-        return $exemplars;
+        return $this->applyAttaches($exemplars);
     }
     
     public function count($criterion=null)
     {
-        if (is_array($criterion) || is_object($criterion) || !$criterion) {
+        if (is_array($criterion) || is_object($criterion) || is_null($criterion)) {
             $query = $this->prepareQuery($criterion, "COUNT({$this->primaryField})");
             $quantity = $this->Db->get_var($query);            
             $limitstart = (isset($criterion['limitstart']) ? $criterion['limitstart'] : 0);          
