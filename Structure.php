@@ -5,6 +5,7 @@ abstract class Structure {
     public $Db;
     public $table;
     public $fields;
+    public $joins;
     public $defaultExemplar;
     public $valuesTypes;
     public $editableFields;
@@ -178,7 +179,13 @@ abstract class Structure {
             
             
             if (isset($field['isUnique']) && $field['isUnique'] === true) {
-                $indexesQuery = ", UNIQUE KEY `i_{$name}` (`{$name}`)";
+                $indexesQuery .= ", UNIQUE KEY `i_{$name}` (`{$name}`)";
+            }
+            
+            
+            
+            if (isset($field['isIndex']) && $field['isIndex'] === true) {
+                $indexesQuery .= ", KEY `i_{$name}` (`{$name}`)";
             }
 
 
@@ -278,6 +285,17 @@ abstract class Structure {
     
     
     
+    public function tie($table, $connection, $joinType="JOIN") 
+    {
+        $this->joins = "{$joinType} {$table} ON ($connection)";
+        
+        return $this;
+    }
+    
+    
+    
+    
+    
     public function get($criterion=false) 
     {
         return (is_array($criterion) || is_object($criterion) || !$criterion ? $this->getAll($criterion) : $this->getOne($criterion));    
@@ -288,7 +306,7 @@ abstract class Structure {
         $field = (in_array($field, array_keys($this->fields)) ? $field : $this->primaryField);
         $type = ($field !== $this->primaryField ? $type : $this->primaryFieldType);
         
-        $query = "SELECT * FROM {$this->table} WHERE `{$field}`={$type}";
+        $query = "SELECT * FROM {$this->table} {$this->joins} WHERE `{$field}`={$type}";
         
         if (!$showDeleted && isset($this->fields[$this->deletedMarkerColumn])) {
             $query .= "AND `{$this->deletedMarkerColumn}`='0'";
@@ -307,7 +325,7 @@ abstract class Structure {
     {
         $fields = (array)$fields;
         $fieldsList = (empty($fields) ? "*" : implode(", ", $fields));         
-        $query = "SELECT {$fieldsList} FROM {$this->table}";
+        $query = "SELECT {$fieldsList} FROM {$this->table} {$this->joins}";
         
         
         
