@@ -127,7 +127,7 @@ abstract class Structure {
                 
                 case "%s":
                     $type = "VARCHAR";
-                    $length = "(255)";
+                    $length = (isset($field['length']) ? "({$field['length']})" : "(255)");
                     break;
             }
             
@@ -191,6 +191,15 @@ abstract class Structure {
 
 
             $fieldsQuery .= "`{$name}` {$type}{$length} {$signed} {$nullable} {$additions}," . PHP_EOL;
+        }
+        
+        
+        
+        if (!empty($this->indexes)) {
+            foreach ($this->indexes as $name=>$index) {
+                $unique = (!isset($index['isUnique']) || $index['isUnique'] === true ? "UNIQUE" : "");
+                $indexesQuery .= ", {$unique} KEY `i_{$name}` (`" . implode("`,`", $index['fields']) . "`)";
+            }
         }
         
         
@@ -304,8 +313,7 @@ abstract class Structure {
     public function getOne($uniqueValue, $returnDefault=true, $field=null, $type="%s", $showDeleted=true)
     {
         $field = (in_array($field, array_keys($this->fields)) ? $field : $this->primaryField);
-        $type = ($field !== $this->primaryField ? $type : $this->primaryFieldType);
-        
+        $type = ($field !== $this->primaryField ? $type : $this->primaryFieldType);        
         $query = "SELECT * FROM {$this->table} {$this->joins} WHERE `{$field}`={$type}";
         
         if (!$showDeleted && isset($this->fields[$this->deletedMarkerColumn])) {
@@ -398,10 +406,10 @@ abstract class Structure {
     
     public function deleteConstatly($id) 
     {
-        $this->delete($id, true);
+        return $this->delete($id, true);
     }
     
-    public function delete($id, $constatly = false) 
+    public function delete($id, $constatly=false) 
     {
         return (($constatly || is_null($this->deletedMarkerColumn)) ? $this->remove($id) : $this->markAsDeleted($id));
     }
