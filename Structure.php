@@ -5,8 +5,8 @@ abstract class Structure {
     public $Db;
     public $table;
     public $fields;
-    public $joins;
-    public $attaches = [];
+    public $ties;
+    public $attaches;
     public $defaultExemplar;
     public $valuesTypes;
     public $editableFields;
@@ -88,6 +88,9 @@ abstract class Structure {
         
         $this->Db = $wpdb;
         $this->table = $this->Db->prefix . $this->table;
+        
+        $this->resetTies();
+        $this->resetAttaches();
         
         $this->defineDefaultExemplar();
         $this->defineValuesTypes();
@@ -268,7 +271,7 @@ abstract class Structure {
         
         $result = $this->Db->query(call_user_func_array([$this->Db, "prepare"], $params));
         
-        return ($result ? $this->Db->insert_id : false);
+        return ($result !== false ? $this->Db->insert_id : false);
     }
     
     protected function setAll($exemplars) 
@@ -294,14 +297,24 @@ abstract class Structure {
     
     
     
+    public function resetTies() 
+    {
+        $this->ties = [
+            'fields' => [],
+            'connections' => ""
+        ];
+        
+        return $this;
+    }
     
-    public function tie($table, $connection, $joinType="JOIN") 
+    public function tie($table, $connection, $fields, $joinType="JOIN") 
     {   
         if (is_array($connection)) {
             $connection = implode(" AND ", $connection);
         } 
-        
-        $this->joins .= "{$joinType} {$table} ON ($connection) ";
+    
+        $this->ties['fields'] = array_merge($this->ties['fields'], $fields);
+        $this->ties['connections'] .= "{$joinType} {$table} ON ($connection) ";
         
         return $this;
     }
@@ -309,6 +322,11 @@ abstract class Structure {
     
     
     
+    
+    public function resetAttaches()
+    {
+        $this->attaches = [];
+    }
     
     public function attach($entity, Structure $Structure, $entityField=null, $attachField=null, $type="ONE_ONE") 
     {
@@ -333,7 +351,7 @@ abstract class Structure {
             }
         }
         
-        $this->attaches = [];
+        $this->resetAttaches();
         
         return $selection;
     }
@@ -349,7 +367,7 @@ abstract class Structure {
                     break;
                     
                 case "ONE_MANY":
-                    $exemplar->{$entity} = $Structure->find(["{$Structure->attachField}='{$exemplar->{$entityField}}'"]);
+                    $exemplar->{$entity} = $Structure->find(["{$Structure->table}.`{$attachField}`='{$exemplar->{$entityField}}'"]);
                     break;
             }
         }
@@ -359,6 +377,14 @@ abstract class Structure {
     
     
     
+    
+    
+    public function search($criterion=null)
+    {
+        $Structure = clone $this;
+
+        return $Structure->get($criterion);
+    }
     
     public function find($criterion=null)
     {
@@ -374,8 +400,9 @@ abstract class Structure {
     {
         $field = (in_array($field, array_keys($this->fields)) ? $field : $this->primaryField);
         $type = ($field !== $this->primaryField ? $type : $this->primaryFieldType);        
-        $query = "SELECT * FROM {$this->table} {$this->joins} WHERE {$this->table}.`{$field}`={$type}";
-        $this->joins = "";
+        $query = "SELECT {$this->table}.*" . (!empty($this->ties['fields']) ? ", " . implode(", ", $this->ties['fields']) : "");
+        $query .= " FROM {$this->table} {$this->ties['connections']} WHERE {$this->table}.`{$field}`={$type}";
+        $this->resetTies();
         
         if (!$showDeleted && isset($this->fields[$this->deletedMarkerColumn])) {
             $query .= "AND `{$this->deletedMarkerColumn}`='0'";
@@ -386,7 +413,7 @@ abstract class Structure {
         if (empty($exemplar) && $returnDefault) { 
             $exemplar = $this->defaultExemplar; 
         }
-        
+
         
         
         return $this->applyAttaches($exemplar);
@@ -394,9 +421,10 @@ abstract class Structure {
     
     protected function prepareQuery($criterion=null)
     {
-        $fieldsList = (empty($criterion['fields']) ? "*" : implode(", ", $criterion['fields']));         
-        $query = "SELECT {$fieldsList} FROM {$this->table} {$this->joins}";
-        $this->joins = "";
+        $fieldsList = (empty($criterion['fields']) ? "{$this->table}.*" : implode(", ", $criterion['fields']));         
+        $query = "SELECT {$fieldsList}" . (!empty($this->ties['fields']) ? ", " . implode(", ", $this->ties['fields']) : "");
+        $query .= " FROM {$this->table} {$this->ties['connections']}";
+        $this->resetTies();
         
         
         
