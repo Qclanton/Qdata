@@ -350,10 +350,10 @@ abstract class Structure {
         if (!empty($this->attaches)) {
             if (is_array($selection)) {
                 foreach ($selection as &$exemplar) {
-                    $exemplar = $this->applyAllAttaches($exemplar);
+                    $exemplar = $this->applyAttachesToExemplar($exemplar);
                 }            
             } else {
-                $selection = $this->applyAllAttaches($selection);
+                $selection = $this->applyAttachesToExemplar($selection);
             }
         }
         
@@ -362,18 +362,18 @@ abstract class Structure {
         return $selection;
     }
     
-    protected function applyAllAttaches($exemplar)
+    protected function applyAttachesToExemplar($exemplar)
     {
         foreach ($this->attaches as $attach) {
             list($entity, $Structure, $entityField, $attachField, $type) = $attach;
             
             switch ($type) {
                 case "ONE_ONE":
-                    $exemplar->{$entity} = $Structure->find($exemplar->{$entityField});
+                    $exemplar->{$entity} = $Structure->get($exemplar->{$entityField});
                     break;
                     
                 case "ONE_MANY":
-                    $exemplar->{$entity} = $Structure->find(["{$Structure->table}.`{$attachField}`='{$exemplar->{$entityField}}'"]);
+                    $exemplar->{$entity} = $Structure->get(["{$Structure->table}.`{$attachField}`='{$exemplar->{$entityField}}'"]);
                     break;
             }
         }
@@ -390,11 +390,6 @@ abstract class Structure {
         $Structure = clone $this;
 
         return $Structure->get($criterion);
-    }
-    
-    public function find($criterion=null)
-    {
-        return $this->get($criterion);
     }
     
     public function get($criterion=null) 
