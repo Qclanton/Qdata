@@ -57,7 +57,7 @@ abstract class Structure {
     protected function defineDeletedMarkerColumn() 
     {
         foreach ($this->fields as $name=>$field) {
-            if (isset($this->fields['isDeletedMarker']) && $field['isDeletedMarker'] === true) {
+            if (isset($field['isDeletedMarker']) && $field['isDeletedMarker'] === true) {
                 $this->deletedMarkerColumn = $name;
             }
         }
@@ -144,6 +144,12 @@ abstract class Structure {
                 }           
                 
                 $primaryFieldQuery = "PRIMARY KEY (`{$name}`)";
+            }
+            
+            
+            
+            if ($name === $this->deletedMarkerColumn) {
+                $type = "TINYINT";
             }
             
 
