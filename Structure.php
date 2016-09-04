@@ -313,7 +313,7 @@ abstract class Structure {
         return $this;
     }
     
-    public function tie($table, $connection, $fields, $joinType="JOIN") 
+    public function tie($table, $connection, array $fields=[], $joinType="JOIN") 
     {   
         if (is_array($connection)) {
             $connection = implode(" AND ", $connection);
@@ -334,13 +334,13 @@ abstract class Structure {
         $this->attaches = [];
     }
     
-    public function attach($entity, Structure $Structure, $entityField=null, $attachField=null, $type="ONE_ONE") 
+    public function attach($entity, Structure $Structure, $entityField=null, $attachField=null, $type="ONE_ONE", Structure $ReferenceStructure=null, $referenceField=null) 
     {
         if (is_null($entityField)) {
             $entityField = "{$entity}_id";
         }
         
-        $this->attaches[] = [$entity, $Structure, $entityField, $attachField, $type];
+        $this->attaches[] = [$entity, $Structure, $entityField, $attachField, $type, $ReferenceStructure, $referenceField];
         
         return $this;
     }
@@ -365,7 +365,7 @@ abstract class Structure {
     protected function applyAttachesToExemplar($exemplar)
     {
         foreach ($this->attaches as $attach) {
-            list($entity, $Structure, $entityField, $attachField, $type) = $attach;
+            list($entity, $Structure, $entityField, $attachField, $type, $ReferenceStructure, $referenceField) = $attach;
             
             switch ($type) {
                 case "ONE_ONE":
@@ -375,11 +375,87 @@ abstract class Structure {
                 case "ONE_MANY":
                     $exemplar->{$entity} = $Structure->get(["{$Structure->table}.`{$attachField}`='{$exemplar->{$entityField}}'"]);
                     break;
+                
+                case "MANY_MANY":
+                    $Structure->tie(
+                        $ReferenceStructure->table, 
+                        "`{$ReferenceStructure->table}`.`{$referenceField}`=`{$Structure->table}`.`{$entityField}`"
+                    );
+                    
+                    $exemplar->{$entity} = $Structure->get(["{$ReferenceStructure->table}.`{$attachField}`='{$exemplar->{$entityField}}'"]);
+                    break;
             }
         }
 
         return $exemplar;
     }
+    
+    
+    
+    
+    
+    
+    public function tiedAttach($entity, Structure $Structure, $entityField=null, $attachField=null, $type="ONE_ONE") 
+    {
+        if (is_null($entityField)) {
+            $entityField = "{$entity}_id";
+        }
+        
+        $this->tiedAttaches[] = [$entity, $Structure, $entityField, $attachField, $type];
+        
+        return $this;
+    }
+    
+    public function applyTiedAttaches($query)
+    {
+        $this->Db->query("SET SESSION group_concat_max_len = 20000000000");
+        list($select, $restOfQuery) = explode("FROM {$this->table}", $query);
+        $joins = "";
+        
+        
+        
+        foreach ($this->tiedAttaches as $attach) {
+            list($entity, $Structure, $entityField, $attachField, $type) = $attach;
+            $alias = "table_{$entity}";            
+            
+            $fieldsJson = "";
+            $iterator = 1;
+            
+            foreach ($Structure->fields as $filedName=>$field) {
+                $comma = (count($Structure->fields) == $iterator ? "" : ",");
+                
+                $fieldsJson .= (in_array($field['type'], ["%d", "%f"])
+                    ? "'\"{$filedName}\":\"',  {$alias}.`{$filedName}`, '\"{$comma}',"
+                    : "'\"{$filedName}\":\"',  REPLACE({$alias}.`{$filedName}`, '\"', '\\\\\"'), '\"{$comma}',"
+                );
+
+                $iterator++;
+            }
+            
+            
+            
+            switch ($type) {
+                case "ONE_ONE":
+                    $this->defaultExemplar->{$entity} = null;
+                    $select .= ", GROUP_CONCAT(CONCAT('{', {$fieldsJson} '}')) AS {$entity}";
+                    break;
+                
+                case "ONE_MANY":
+                    $this->defaultExemplar->{$entity} = [];
+                    $select .= ", CONCAT('[', GROUP_CONCAT(CONCAT('{', {$fieldsJson} '}')), ']') AS {$entity}";
+                    break;                
+            }
+            
+            
+            
+            $joins .= " JOIN {$Structure->table} {$alias} ON ({$alias}.`{$attachField}`={$this->table}.`{$entityField}`) ";
+        }
+        
+        $query = "{$select} FROM {$this->table} {$joins} {$restOfQuery} GROUP BY {$this->table}.`{$entityField}`";
+        
+        return $query;
+    }
+    
     
     
     
@@ -407,6 +483,11 @@ abstract class Structure {
         
         if (!$showDeleted && isset($this->fields[$this->deletedMarkerColumn])) {
             $query .= "AND `{$this->deletedMarkerColumn}`='0'";
+        }
+        
+        if (!empty($this->tiedAttaches)) {
+            $tiedAttachQuery = $this->applyTiedAttaches($query);
+            // d($tiedAttachQuery);
         }
         
         $exemplar = $this->Db->get_row($this->Db->prepare($query, $uniqueValue));
@@ -451,7 +532,7 @@ abstract class Structure {
             
             
             if (isset($criterion['orderby'])) {
-                $query .= " ORDER BY `{$criterion['orderby']}`";
+                $query .= " ORDER BY {$criterion['orderby']}";
                 
                 if (isset($criterion['order'])) {
                     $query .= " {$criterion['order']}";
@@ -528,30 +609,5 @@ abstract class Structure {
         $result = $this->Db->query($this->Db->prepare($query, $id));
         
         return $result;    
-    }
-    
-    
-    
-    
-    
-    public function simplify($objectsList, $value, $key=null, $type="object") 
-    {
-        $simplified = [];
-        
-        foreach ($objectsList as $object) {
-            $object = (object)$object;
-            
-            if (empty($key)) {
-                $simplified[] = $object->{$value};
-            } else {
-                $simplified[$object->{$key}] = $object->{$value};
-            }    
-        }
-        
-        if ($type == "object") { 
-            $simplified = (object)$simplified; 
-        }
-        
-        return $simplified;
     }
 }
