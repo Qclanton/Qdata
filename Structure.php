@@ -492,7 +492,7 @@ abstract class Structure {
         
         $exemplar = $this->Db->get_row($this->Db->prepare($query, $uniqueValue));
         
-        if (empty($exemplar) && $returnDefault) { 
+        if ((empty($exemplar) || empty($exemplar->{$this->primaryField})) && $returnDefault) { 
             $exemplar = $this->defaultExemplar; 
         }
 
@@ -503,8 +503,9 @@ abstract class Structure {
     
     protected function prepareQuery($criterion=null)
     {
+        $distinct = (!empty($this->ties['fields']) ? "DISTINCT" : "");
         $fieldsList = (empty($criterion['fields']) ? "{$this->table}.*" : implode(", ", $criterion['fields']));         
-        $query = "SELECT {$fieldsList}" . (!empty($this->ties['fields']) ? ", " . implode(", ", $this->ties['fields']) : "");
+        $query = "SELECT {$distinct} {$fieldsList}" . (!empty($this->ties['fields']) ? ", " . implode(", ", $this->ties['fields']) : "");
         $query .= " FROM {$this->table} {$this->ties['connections']}";
         $this->resetTies();
         
@@ -522,13 +523,20 @@ abstract class Structure {
             
             
             if (isset($criterion['confines'])) {
-                $query .= " WHERE 1=1";
+                if (empty($criterion['custom'])) {
+                    $query .= " WHERE 1=1";
+                }
                 
                 foreach ($criterion['confines'] as $confine) {
                     $query .= " AND {$confine}";
                 }
             }
             
+            
+            
+            if (isset($criterion['groupby'])) {
+                $query .= " GROUP BY {$criterion['groupby']}";
+            }
             
             
             if (isset($criterion['orderby'])) {
@@ -553,7 +561,12 @@ abstract class Structure {
     public function getAll($criterion=null) 
     {
         $query = $this->prepareQuery($criterion);
-        $exemplars = $this->Db->get_results($query);        
+        $exemplars = $this->Db->get_results($query);     
+        
+        // Return empty results immidiately
+        if (empty($exemplars[0]->{$this->primaryField})) {
+            return [];
+        }
         
         return $this->applyAttaches($exemplars);
     }
