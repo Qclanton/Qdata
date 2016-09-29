@@ -468,6 +468,18 @@ abstract class Structure {
         return $Structure->get($criterion);
     }
     
+    public function searchOne($criterion=null, $returnDefault=true) 
+    {
+        $exemplars = $this->search($criterion);
+        $first = $exemplars[0];
+        
+        if (empty($exemplars) || (isset($first) && empty($first->{$this->primaryField}))) {
+            return ($returnDefault ? $this->defaultExemplar : null);
+        }
+        
+        return $first;
+    }
+    
     public function get($criterion=null) 
     {
         return (is_array($criterion) || is_object($criterion) || is_null($criterion) ? $this->getAll($criterion) : $this->getOne($criterion));    
@@ -564,7 +576,10 @@ abstract class Structure {
         $exemplars = $this->Db->get_results($query);     
         
         // Return empty results immidiately
-        if (empty($exemplars[0]->{$this->primaryField})) {
+        if (
+            isset($exemplars[0]->{$this->primaryField}) && 
+            empty($exemplars[0]->{$this->primaryField})) 
+        {
             return [];
         }
         
