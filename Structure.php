@@ -14,6 +14,7 @@ abstract class Structure {
     public $primaryField = "id";
     public $primaryFieldType = "%d";
     public $dateFields = [];
+    public $foundRows;
     
     
     
@@ -464,20 +465,26 @@ abstract class Structure {
     public function search($criterion=null)
     {
         $Structure = clone $this;
-
-        return $Structure->get($criterion);
+        
+        $data = $Structure->get($criterion);
+        $this->foundRows = $Structure->foundRows;
+        
+        return $data;
     }
     
     public function searchOne($criterion=null, $returnDefault=true) 
     {
         $exemplars = $this->search($criterion);
-        $first = $exemplars[0];
         
-        if (empty($exemplars) || (isset($first) && empty($first->{$this->primaryField}))) {
+        if (!is_array($exemplars)) {
+            $exemplars[] = $exemplars;
+        }
+        
+        if (empty($exemplars) || (isset($exemplars[0]) && empty($exemplars[0]->{$this->primaryField}))) {
             return ($returnDefault ? $this->defaultExemplar : null);
         }
         
-        return $first;
+        return $exemplars[0];
     }
     
     public function get($criterion=null) 
@@ -497,10 +504,15 @@ abstract class Structure {
             $query .= "AND `{$this->deletedMarkerColumn}`='0'";
         }
         
+        
+        
+        /*
         if (!empty($this->tiedAttaches)) {
             $tiedAttachQuery = $this->applyTiedAttaches($query);
-            // d($tiedAttachQuery);
         }
+        */
+        
+        
         
         $exemplar = $this->Db->get_row($this->Db->prepare($query, $uniqueValue));
         
@@ -510,14 +522,22 @@ abstract class Structure {
 
         
         
+        // Set info about found rows
+        if (!empty($criterion['calcFoundRows'])) {
+            $this->foundRows = $this->Db->get_var("SELECT FOUND_ROWS()");
+        }
+        
+        
+        
         return $this->applyAttaches($exemplar);
     }
     
     protected function prepareQuery($criterion=null)
     {
+        $calcFoundRows = (!empty($criterion['calcFoundRows']) ? "SQL_CALC_FOUND_ROWS" : "");
         $distinct = (!empty($this->ties['fields']) ? "DISTINCT" : "");
         $fieldsList = (empty($criterion['fields']) ? "{$this->table}.*" : implode(", ", $criterion['fields']));         
-        $query = "SELECT {$distinct} {$fieldsList}" . (!empty($this->ties['fields']) ? ", " . implode(", ", $this->ties['fields']) : "");
+        $query = "SELECT {$calcFoundRows} {$distinct} {$fieldsList}" . (!empty($this->ties['fields']) ? ", " . implode(", ", $this->ties['fields']) : "");
         $query .= " FROM {$this->table} {$this->ties['connections']}";
         $this->resetTies();
         
@@ -537,6 +557,10 @@ abstract class Structure {
             if (isset($criterion['confines'])) {
                 if (empty($criterion['custom'])) {
                     $query .= " WHERE 1=1";
+                }
+                
+                if (!is_array($criterion['confines'])) {
+                    $criterion['confines'] = (array)$criterion['confines'];
                 }
                 
                 foreach ($criterion['confines'] as $confine) {
@@ -583,24 +607,14 @@ abstract class Structure {
             return [];
         }
         
+        // Set info about found rows
+        if (!empty($criterion['calcFoundRows'])) {
+            $this->foundRows = $this->Db->get_var("SELECT FOUND_ROWS()");
+        }
+        
         return $this->applyAttaches($exemplars);
     }
     
-    public function count($criterion=null)
-    {
-        if (is_array($criterion) || is_object($criterion) || is_null($criterion)) {
-            $query = $this->prepareQuery($criterion, "COUNT({$this->primaryField})");
-            $quantity = $this->Db->get_var($query);            
-            $limitstart = (isset($criterion['limitstart']) ? $criterion['limitstart'] : 0);          
-   
-            return (isset($criterion['limit']) && ($criterion['limit'] - $limitstart) < $quantity
-                ? $criterion['limit']-$limitstart
-                : $quantity
-            );
-        } 
-        
-        return 1;
-    }
     
     
     
